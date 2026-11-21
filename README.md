@@ -1,6 +1,10 @@
 # Token Burn
 
-Token Burn is a macOS app for tracking AI subscriptions. Its main view, the **Deck**, keeps your accounts visible across desktops. Each ring shows the percentage of allowance left for Claude, Codex, OpenCode Go or Grok. Each provider logo sits inside its allowance rings. The outer ring shows the selected window and the inner ring shows a second reported window when available. Dividers separate providers. The arc is green at 20% remaining or above, and red below 20%. An unknown balance has a gray ring.
+Token Burn is a macOS app for tracking AI subscriptions. Its main view, the **Deck**, keeps your accounts visible across desktops. Each ring shows the percentage of allowance left for Claude, Codex, OpenCode Go or Grok.
+
+![Sample Deck showing Claude Pro at 82% left, Claude Max 20x at 14%, Codex Pro 500 at 63%, OpenCode Go Plus at 38%, and SuperGrok at 92%.](docs/screenshots/deck.png)
+
+The screenshots use fictional accounts and example usage. Ava’s Claude Pro account has 82% of its session allowance left. The studio’s Max 20x account has 14%, so its outer ring is red.
 
 ## Install on macOS
 
@@ -29,9 +33,26 @@ Install CodexBar in Applications or put its CLI on your path. With Homebrew, run
 
 ## Using the Deck
 
+The outer ring shows the selected allowance window. An inner ring shows a second window when available. Green means at least 20% remains, red means less than 20%, and gray means the balance is unknown.
+
 Drag the dotted grip or title to move the panel. Drag the bottom-right grip to make the widget smaller or larger. Its scale is saved across launches. The diagonal arrows switch between full and compact layouts. Click the minus button to minimize, then choose **Restore Deck** from its menu-bar icon. The pin keeps it above other windows. The green usage rings in the menu bar open the Deck controls.
 
+<img src="docs/screenshots/compact.png" width="298" alt="Compact Deck showing the same five sample accounts, remaining allowances, price badges, and reset countdowns.">
+
 ## Accounts and readings
+
+<details>
+<summary>See the sample accounts and their reset details</summary>
+
+The connected-account list distinguishes `ava@example.com` and `studio@example.com` even though both use Claude.
+
+<img src="docs/screenshots/accounts.png" width="428" alt="Connected accounts showing separate example.com email addresses for Ava, Studio, and Dev, with account ordering controls.">
+
+The orange dot on Codex marks two banked resets. Opening the tile shows when each one expires.
+
+<img src="docs/screenshots/detail.png" width="428" alt="Codex Pro 500 details for dev@example.com, with 63% of the weekly allowance left and two banked resets.">
+
+</details>
 
 - Hover over a ring for a summary. Click it for the account, plan, usage windows, reset times and last update. Select a window to display its remaining percentage on the ring. An orange dot means the account has banked resets. Hover or expand for the count and reported expirations. Claude may report only the next expiry. An isolated Claude login tries a matching OAuth reading first, then falls back to the CLI. The CLI reports quotas without a saved-reset count. When a web or OAuth reading omits the inventory, the Deck shows “not reported” in the tooltip and details.
 - Drag an account tile onto another tile to move it into that position. A click opens details. With multiple pages, drop on a page arrow to move across the page boundary. The arrows in **+ → Connected accounts** also change the order. Each account keeps its position across refreshes and restarts.
