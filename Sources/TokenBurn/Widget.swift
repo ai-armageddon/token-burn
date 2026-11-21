@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 private enum PanelPage: Equatable {
-    case rings, detail(UUID), edit(UUID), add
+    case deck, detail(UUID), edit(UUID), add
 }
 
 struct Widget: View {
@@ -9,14 +9,14 @@ struct Widget: View {
     let resize: (CGSize) -> Void
     let minimize: () -> Void
     @AppStorage("TokenBurnCompactMode") private var prefersCompact = false
-    private var compact: Bool { prefersCompact && page == .rings }
+    private var compact: Bool { prefersCompact && page == .deck }
     private var size: CGSize { CGSize(width: compact ? 298 : 428, height: height) }
-    @ViewState private var page: PanelPage = .rings
+    @ViewState private var page: PanelPage = .deck
     @ViewState private var group = 0
     private var groupCount: Int { max(1, (store.visible.count + 4) / 5) }
     private var height: CGFloat {
         switch page {
-        case .rings: return compact ? (groupCount > 1 ? 140 : 120) : 241
+        case .deck: return compact ? (groupCount > 1 ? 140 : 120) : 241
         case .detail: return 505
         case .edit, .add: return 535
         }
@@ -33,15 +33,20 @@ struct Widget: View {
                             }
                         }
                     }.frame(width: 7, height: 10).accessibilityHidden(true)
-                    BurnMark().fill(Color.signal).frame(width: compact ? 16 : 23, height: compact ? 13 : 18)
+                    Image(nsImage: TokenBurnMark.image).resizable().renderingMode(.original)
+                        .frame(width: compact ? 16 : 22, height: compact ? 16 : 22)
+                        .accessibilityHidden(true)
                     if !compact { Text("TOKEN BURN").font(.system(size: 14, weight: .black)).tracking(-0.5) }
+                    if !compact { Divider().frame(height: 12).padding(.horizontal, 2) }
+                    Text("Deck").font(.system(size: compact ? 11 : 13, weight: .semibold))
+                        .foregroundStyle(Color.quiet)
                     Spacer(minLength: 0)
                 }.frame(maxHeight: .infinity).overlay { WindowDragArea().frame(maxWidth: .infinity, maxHeight: .infinity) }
                 GlyphButton(symbol: "minus", help: "Minimize Token Burn", action: minimize)
                 GlyphButton(symbol: compact ? "arrow.up.left.and.arrow.down.right" : "arrow.down.right.and.arrow.up.left",
                             help: compact ? "Expand widget" : "Make widget compact") {
                     prefersCompact = !compact
-                    page = .rings
+                    page = .deck
                 }
                 GlyphButton(symbol: store.state.pinned ? "pin.fill" : "pin", help: store.state.pinned ? "Unpin window" : "Keep above other windows", lit: store.state.pinned) {
                     store.setPinned(!store.state.pinned)
@@ -49,7 +54,7 @@ struct Widget: View {
                 GlyphButton(symbol: "arrow.clockwise", help: "Refresh all accounts") { store.refresh() }
                     .disabled(!store.refreshing.isEmpty)
                 GlyphButton(symbol: "plus", help: "Add or restore an account", lit: page == .add) {
-                    page = page == .add ? .rings : .add
+                    page = page == .add ? .deck : .add
                 }
             }.padding(.horizontal, compact ? 9 : 15).frame(height: compact ? 30 : 44)
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
@@ -60,7 +65,7 @@ struct Widget: View {
                     RingTile(account: account, width: compact ? 54 : (store.visible.count >= 5 ? 76 : 95), compact: compact, subtitle: subtitle(account, duplicates: duplicates), selected: page == .detail(account.id), drop: { dragged in
                         withAnimation(.easeOut(duration: 0.16)) { store.move(dragged, to: account.id) }
                     }) {
-                        page = page == .detail(account.id) ? .rings : .detail(account.id)
+                        page = page == .detail(account.id) ? .deck : .detail(account.id)
                     }
                     .overlay(alignment: .trailing) {
                         if index + 1 < accounts.count, accounts[index + 1].provider != account.provider {
@@ -97,7 +102,7 @@ struct Widget: View {
                 }.font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(Color.quiet).buttonStyle(.plain)
                     .padding(.horizontal, 18).frame(height: compact ? 20 : 28)
             }
-            if page != .rings {
+            if page != .deck {
                 Divider()
                 switch page {
                 case .detail(let id):
@@ -105,15 +110,15 @@ struct Widget: View {
                         Detail(account: account, choose: { key in store.update(id) { $0.preferred = key } },
                                connectDesktop: { store.connectDesktop() }, connecting: store.connectingDesktop, message: store.desktopMessage,
                                signIn: { store.refreshProfile(account, signIn: true) }, profileBusy: store.refreshingProfiles.contains(id),
-                               edit: { page = .edit(id) }, close: { page = .rings })
+                               edit: { page = .edit(id) }, close: { page = .deck })
                     }
                 case .edit(let id):
                     if let account = store.state.accounts.first(where: { $0.id == id }) {
                         AccountForm(store: store, original: account, done: navigate, close: { page = .detail(id) }).id(id)
                     }
                 case .add:
-                    AccountForm(store: store, original: nil, done: navigate, close: { page = .rings })
-                case .rings: EmptyView()
+                    AccountForm(store: store, original: nil, done: navigate, close: { page = .deck })
+                case .deck: EmptyView()
                 }
             }
         }.frame(width: size.width, height: size.height, alignment: .top)
@@ -123,7 +128,7 @@ struct Widget: View {
             .preferredColorScheme(.dark)
             .onChange(of: size, initial: true) { _, value in resize(value) }
             .onChange(of: groupCount) { _, value in group = min(group, value - 1) }
-            .onExitCommand { page = .rings }
+            .onExitCommand { page = .deck }
             .alert("Account storage", isPresented: Binding(get: { store.storageIssue != nil }, set: { if !$0 { store.storageIssue = nil } })) {
                 Button("OK") { store.storageIssue = nil }
             } message: { Text(store.storageIssue ?? "") }
@@ -143,7 +148,7 @@ struct Widget: View {
         if let id, let index = store.visible.firstIndex(where: { $0.id == id }) {
             group = index / 5
             page = .detail(id)
-        } else { page = .rings }
+        } else { page = .deck }
     }
 
     private func subtitle(_ account: Account, duplicates: Bool) -> String {

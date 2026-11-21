@@ -1,6 +1,6 @@
 # Token Burn
 
-A small macOS panel that keeps subscription usage in view across desktops. Each ring shows the percentage of allowance left for Claude, Codex, OpenCode Go or Grok. Each provider logo sits inside its allowance rings. The outer ring shows the selected window and the inner ring shows a second reported window when available. Dividers separate providers. The arc is green at 20% remaining or above, and red below 20%. An unknown balance has a gray ring.
+Token Burn is a macOS app for tracking AI subscriptions. Its main view, the **Deck**, keeps your accounts visible across desktops. Each ring shows the percentage of allowance left for Claude, Codex, OpenCode Go or Grok. Each provider logo sits inside its allowance rings. The outer ring shows the selected window and the inner ring shows a second reported window when available. Dividers separate providers. The arc is green at 20% remaining or above, and red below 20%. An unknown balance has a gray ring.
 
 ## Run
 
@@ -11,7 +11,7 @@ Requires macOS 14 or later. Install the Xcode Command Line Tools to build from s
 open "dist/Token Burn.app"
 ```
 
-Drag the dotted grip or title to move the panel. Drag the bottom-right grip to make the widget smaller or larger. Its scale is saved across launches. The diagonal arrows switch between full and compact layouts. Click the minus button to minimize, then choose **Restore Token Burn** from its menu-bar icon. The pin keeps it above other windows. The three-stripe mark in the menu bar can show, hide or quit the app.
+Drag the dotted grip or title to move the panel. Drag the bottom-right grip to make the widget smaller or larger. Its scale is saved across launches. The diagonal arrows switch between full and compact layouts. Click the minus button to minimize, then choose **Restore Deck** from its menu-bar icon. The pin keeps it above other windows. The green usage rings in the menu bar open the Deck controls.
 
 ## Accounts and readings
 

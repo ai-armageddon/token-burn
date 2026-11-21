@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSScreen.screens.contains { $0.visibleFrame.insetBy(dx: -1, dy: -1).contains(NSPoint(x: point.x + 30, y: point.y - 20)) } ? point : nil
         } ?? fallback
         panel = FloatingPanel(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless, .miniaturizable], backing: .buffered, defer: false)
-        panel.title = "Token Burn"
+        panel.title = "Token Burn — Deck"
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
@@ -61,14 +61,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         NotificationCenter.default.addObserver(self, selector: #selector(rememberPosition), name: NSWindow.didMoveNotification, object: panel)
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        let mark = NSImage(size: NSSize(width: 20, height: 16), flipped: true) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(cgPath: BurnMark().path(in: rect.insetBy(dx: 1, dy: 1)).cgPath).fill()
-            return true
-        }
-        mark.isTemplate = true
-        item.button?.image = mark
-        item.button?.toolTip = "Token Burn"
+        item.button?.image = TokenBurnMark.image
+        item.button?.toolTip = "Token Burn — Deck"
         let menu = NSMenu()
         menu.delegate = self
         item.menu = menu
@@ -118,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        for (title, action) in [(panel.isMiniaturized ? "Restore Token Burn" : panel.isVisible ? "Hide Token Burn" : "Show Token Burn", #selector(togglePanel)),
+        for (title, action) in [(panel.isMiniaturized ? "Restore Deck" : panel.isVisible ? "Hide Deck" : "Show Deck", #selector(togglePanel)),
                                 (store.state.pinned ? "Unpin Window" : "Pin Above Other Windows", #selector(togglePin)),
                                 ("Refresh Usage", #selector(refresh))] {
             menu.addItem(withTitle: title, action: action, keyEquivalent: "").target = self

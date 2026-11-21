@@ -37,26 +37,6 @@ struct ProviderLogo: View {
     }
 }
 
-// Three forward-leaning cuts form the app and menu-bar mark.
-struct BurnMark: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        for i in 0..<3 {
-            let left = CGFloat(i) * 0.29
-            let top = CGFloat(2 - i) * 0.16
-            func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-                CGPoint(x: rect.minX + x * rect.width, y: rect.minY + y * rect.height)
-            }
-            path.move(to: point(left, 1))
-            path.addLine(to: point(left + 0.18 * (1 - top), top))
-            path.addLine(to: point(left + 0.20 + 0.18 * (1 - top), top))
-            path.addLine(to: point(left + 0.20, 1))
-            path.closeSubpath()
-        }
-        return path
-    }
-}
-
 struct GlyphButton: View {
     let symbol: String
     let help: String
