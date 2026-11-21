@@ -60,6 +60,17 @@ extension Account {
     var listPlan: ListPlan? { tier.flatMap { ListPlan.lookup($0, provider: provider) } }
     var tierName: String? { listPlan?.name ?? tier }
     var priceText: String? { customPrice ?? listPlan.map { "$\($0.dollars)/mo list" } }
+    var badgeAmount: Decimal? {
+        guard let customPrice else { return listPlan.map { Decimal($0.dollars) } }
+        // Accept a single billed amount; mixed or ambiguous descriptions keep their full text in details.
+        let price = customPrice.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pattern = #"^(?:[A-Za-z]{3}\s*|US)?[$€£¥₹]?\s*([0-9]+(?:\.[0-9]{1,2})?)\s*(?:[A-Za-z]{3}\b)?(?:\s*(?:/|per\s+)\s*[A-Za-z]+)?$"#
+        guard let match = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive)
+            .firstMatch(in: price, range: NSRange(price.startIndex..., in: price)),
+              let range = Range(match.range(at: 1), in: price) else { return nil }
+        return Decimal(string: String(price[range]), locale: Locale(identifier: "en_US_POSIX"))
+    }
+
     var priceDetail: String {
         if let customPrice { return "\(customPrice) · Entered by you" }
         if let listPlan { return "US$\(listPlan.dollars)/month · US web list price" }

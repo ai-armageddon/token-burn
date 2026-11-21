@@ -56,6 +56,7 @@ struct Account: Identifiable, Codable {
     var preferred = ""
     var reading: Reading?
     var issue: String?
+    var claudeProfileEmail: String?
     var customTier: String?
     var customPrice: String?
     var meter: Meter? {
@@ -67,7 +68,7 @@ struct Account: Identifiable, Codable {
     }
     var isDesktopClaude: Bool { provider == .claude && key?.hasPrefix("claude-desktop:") == true }
     var name: String { label.isEmpty ? provider.name : label }
-    var accountLabel: String? { isDesktopClaude ? (reading?.identity ?? "Claude Desktop") : key }
+    var accountLabel: String? { isDesktopClaude ? (reading?.identity ?? "Claude Desktop") : (claudeProfileEmail ?? key) }
     var stale: Bool {
         guard let reading else { return false }
         if let reset = meter?.reset, reset <= Date() { return true }
@@ -185,22 +186,25 @@ enum UsageFeed {
         return try parse(execute(arguments), provider: provider)
     }
 
-    static func execute(_ arguments: [String], environment: [String: String] = [:]) throws -> Data {
+    static func execute(_ arguments: [String], environment: [String: String] = [:], executable: String = "codexbar") throws -> Data {
         let files = FileManager.default
         let home = files.homeDirectoryForCurrentUser.path
         let envPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
         let paths = ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/.local/bin", "\(home)/.grok/bin", "\(home)/.opencode/bin",
                      "/Applications/CodexBar.app/Contents/Helpers"]
         let bins = paths + envPath.components(separatedBy: ":").filter { $0.hasPrefix("/") }
-        let candidates = bins.map { $0 + "/codexbar" } + ["/Applications/CodexBar.app/Contents/Helpers/CodexBarCLI"]
+        let candidates = bins.map { $0 + "/" + executable } + (executable == "codexbar" ? ["/Applications/CodexBar.app/Contents/Helpers/CodexBarCLI"] : [])
         guard let binary = candidates.first(where: files.isExecutableFile(atPath:)) else {
-            throw FeedError.message("Install CodexBar with its CLI to connect automatic usage.")
+            throw FeedError.message("Install the \(executable) CLI to connect this account.")
         }
         let process = Process(), output = Pipe()
         process.executableURL = URL(fileURLWithPath: binary)
         process.arguments = arguments
         var env = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
         env["PATH"] = bins.joined(separator: ":")
+        if environment["CLAUDE_CONFIG_DIR"] != nil {
+            for key in ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] { env.removeValue(forKey: key) }
+        }
         process.environment = env
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
@@ -213,11 +217,16 @@ enum UsageFeed {
         let killTimeout = DispatchWorkItem {
             if process.isRunning { kill(process.processIdentifier, SIGKILL) }
         }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 120, execute: timeout)
-        DispatchQueue.global().asyncAfter(deadline: .now() + 123, execute: killTimeout)
+        let seconds = arguments.starts(with: ["auth", "login"]) ? 300 : 120
+        DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(seconds), execute: timeout)
+        DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(seconds + 3), execute: killTimeout)
         defer { timeout.cancel(); killTimeout.cancel() }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        if executable == "claude", arguments.starts(with: ["auth", "login"]) {
+            guard process.terminationStatus == 0 else { throw FeedError.message("Claude sign-in did not finish. Try again.") }
+            return Data()
+        }
         guard !data.isEmpty else {
             throw FeedError.message("No response from CodexBar. Check the provider login and refresh.")
         }

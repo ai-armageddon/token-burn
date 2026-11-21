@@ -4,6 +4,40 @@ import Combine
 struct SavedState: Codable {
     var accounts = Provider.allCases.map { Account(provider: $0) }
     var pinned = true
+    var accountOrder: [UUID]?
+
+    var visibleAccounts: [Account] {
+        let grouped = Provider.allCases.flatMap { provider in accounts.filter { $0.provider == provider && !$0.hidden } }
+        guard let accountOrder else { return grouped }
+        let byID = Dictionary(uniqueKeysWithValues: grouped.map { ($0.id, $0) })
+        let known = Set(accountOrder)
+        return accountOrder.compactMap { byID[$0] } + grouped.filter { !known.contains($0.id) }
+    }
+
+    mutating func move(_ id: UUID, by step: Int) {
+        let ids = visibleAccounts.map(\.id)
+        guard let position = ids.firstIndex(of: id), ids.indices.contains(position + step) else { return }
+        move(id, to: ids[position + step])
+    }
+
+    @discardableResult
+    mutating func move(_ id: UUID, to target: UUID) -> Bool {
+        var visible = visibleAccounts.map(\.id)
+        guard id != target, let from = visible.firstIndex(of: id),
+              let to = visible.firstIndex(of: target) else { return false }
+        visible.remove(at: from)
+        visible.insert(id, at: to)
+
+        var order = accountOrder ?? Provider.allCases.flatMap { provider in accounts.filter { $0.provider == provider }.map(\.id) }
+        let known = Set(order)
+        order.append(contentsOf: visible.filter { !known.contains($0) })
+        let visibleIDs = Set(visible)
+        // Replace visible slots in sequence so hidden accounts retain their saved positions.
+        var reordered = visible.makeIterator()
+        accountOrder = order.map { visibleIDs.contains($0) ? (reordered.next() ?? $0) : $0 }
+        return true
+    }
+
     var explicitExtraAccounts: Bool? = true
 
     mutating func migrateAccountVisibility() {
@@ -18,7 +52,7 @@ struct SavedState: Codable {
     }
 
     mutating func merge(_ observations: [Observation], for provider: Provider) {
-        let existing = accounts.indices.filter { accounts[$0].provider == provider && !accounts[$0].manual }
+        let existing = accounts.indices.filter { accounts[$0].provider == provider && !accounts[$0].manual && accounts[$0].claudeProfileEmail == nil }
         if observations.count == 1, let observation = observations.first, observation.key == nil, observation.reading == nil {
             for index in existing { accounts[index].issue = observation.issue }
             return
@@ -60,10 +94,11 @@ final class Store: ObservableObject {
     private var canSave = true
     private var timer: Timer?
     private var expiryTimer: Timer?
+    @Published private(set) var refreshingProfiles = Set<UUID>()
     @Published var connectingDesktop = false
     @Published var desktopMessage: String?
     var visible: [Account] {
-        Provider.allCases.flatMap { provider in state.accounts.filter { $0.provider == provider && !$0.hidden } }
+        state.visibleAccounts
     }
 
     init() {
@@ -119,8 +154,36 @@ final class Store: ObservableObject {
     func showAccount(_ id: UUID) {
         guard let account = state.accounts.first(where: { $0.id == id }) else { return }
         update(id) { $0.hidden = false }
+        if account.claudeProfileEmail != nil { refreshProfile(account, signIn: false) }
         if account.isDesktopClaude {
             if refreshing.contains(.claude) { retryDesktop = true } else { refresh(.claude) }
+        }
+    }
+
+    func addClaudeProfile(_ email: String) -> UUID {
+        if let account = state.accounts.first(where: {
+            $0.provider == .claude && ($0.claudeProfileEmail ?? $0.reading?.identity)?.caseInsensitiveCompare(email) == .orderedSame
+        }) {
+            showAccount(account.id)
+            return account.id
+        }
+        let account = Account(provider: .claude, claudeProfileEmail: email)
+        add(account)
+        refreshProfile(account, signIn: true)
+        return account.id
+    }
+
+    func refreshProfile(_ account: Account, signIn: Bool) {
+        guard refreshingProfiles.insert(account.id).inserted else { return }
+        Task {
+            do {
+                let reading = try await Task.detached(priority: .utility) { try ClaudeProfile.fetch(account, signIn: signIn) }.value
+                update(account.id) { $0.reading = reading; $0.issue = nil }
+                scheduleExpiry()
+            } catch {
+                update(account.id) { $0.issue = error.localizedDescription }
+            }
+            refreshingProfiles.remove(account.id)
         }
     }
 
@@ -128,6 +191,7 @@ final class Store: ObservableObject {
 
     func refresh() {
         for provider in Provider.allCases { refresh(provider) }
+        for account in visible where account.claudeProfileEmail != nil { refreshProfile(account, signIn: false) }
     }
 
     private func refresh(_ provider: Provider) {
@@ -144,6 +208,17 @@ final class Store: ObservableObject {
                 refresh(.claude)
             }
         }
+    }
+
+    func move(_ id: UUID, by step: Int) {
+        state.move(id, by: step)
+        save()
+    }
+
+    func move(_ id: UUID, to target: UUID) -> Bool {
+        guard state.move(id, to: target) else { return false }
+        save()
+        return true
     }
 
     func setPinned(_ value: Bool) { state.pinned = value; save() }

@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-
 private enum PanelPage: Equatable {
     case rings, detail(UUID), edit(UUID), add
 }
@@ -17,9 +16,9 @@ struct Widget: View {
     private var groupCount: Int { max(1, (store.visible.count + 4) / 5) }
     private var height: CGFloat {
         switch page {
-        case .rings: return compact ? (groupCount > 1 ? 125 : 105) : 222
-        case .detail: return 486
-        case .edit, .add: return 516
+        case .rings: return compact ? (groupCount > 1 ? 140 : 120) : 241
+        case .detail: return 505
+        case .edit, .add: return 535
         }
     }
     var body: some View {
@@ -58,7 +57,9 @@ struct Widget: View {
                 let accounts = Array(store.visible.dropFirst(min(group, groupCount - 1) * 5).prefix(5))
                 ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
                     let duplicates = store.visible.filter { $0.provider == account.provider }.count > 1
-                    RingTile(account: account, width: compact ? 50 : (store.visible.count >= 5 ? 76 : 95), compact: compact, subtitle: subtitle(account, duplicates: duplicates), selected: page == .detail(account.id)) {
+                    RingTile(account: account, width: compact ? 54 : (store.visible.count >= 5 ? 76 : 95), compact: compact, subtitle: subtitle(account, duplicates: duplicates), selected: page == .detail(account.id), drop: { dragged in
+                        withAnimation(.easeOut(duration: 0.16)) { store.move(dragged, to: account.id) }
+                    }) {
                         page = page == .detail(account.id) ? .rings : .detail(account.id)
                     }
                     .overlay(alignment: .trailing) {
@@ -71,7 +72,7 @@ struct Widget: View {
                 if store.visible.isEmpty {
                     Button("Add an account") { page = .add }.buttonStyle(.bordered)
                 }
-            }.frame(maxWidth: .infinity).frame(height: compact ? 74 : 149)
+            }.frame(maxWidth: .infinity).frame(height: compact ? 89 : 168)
             if !compact || groupCount > 1 {
                 HStack(spacing: 5) {
                     Circle().fill(store.refreshing.isEmpty ? Color.quiet : Color.signal).frame(width: 5, height: 5)
@@ -80,8 +81,18 @@ struct Widget: View {
                     Text("AUTO 5 MIN").tracking(0.6).foregroundStyle(Color.quiet)
                     if groupCount > 1 {
                         Button { group -= 1 } label: { Image(systemName: "chevron.left") }.disabled(group == 0).help("Previous accounts")
+                            .overlay {
+                                if group > 0 {
+                                    AccountDragArea(help: "Previous accounts", click: { group -= 1 }, drop: { dropOnPageArrow($0, step: -1) })
+                                }
+                            }
                         Text("\(group + 1) / \(groupCount)").monospacedDigit()
                         Button { group += 1 } label: { Image(systemName: "chevron.right") }.disabled(group + 1 >= groupCount).help("Next accounts")
+                            .overlay {
+                                if group + 1 < groupCount {
+                                    AccountDragArea(help: "Next accounts", click: { group += 1 }, drop: { dropOnPageArrow($0, step: 1) })
+                                }
+                            }
                     }
                 }.font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(Color.quiet).buttonStyle(.plain)
                     .padding(.horizontal, 18).frame(height: compact ? 20 : 28)
@@ -93,6 +104,7 @@ struct Widget: View {
                     if let account = store.state.accounts.first(where: { $0.id == id }) {
                         Detail(account: account, choose: { key in store.update(id) { $0.preferred = key } },
                                connectDesktop: { store.connectDesktop() }, connecting: store.connectingDesktop, message: store.desktopMessage,
+                               signIn: { store.refreshProfile(account, signIn: true) }, profileBusy: store.refreshingProfiles.contains(id),
                                edit: { page = .edit(id) }, close: { page = .rings })
                     }
                 case .edit(let id):
@@ -115,6 +127,16 @@ struct Widget: View {
             .alert("Account storage", isPresented: Binding(get: { store.storageIssue != nil }, set: { if !$0 { store.storageIssue = nil } })) {
                 Button("OK") { store.storageIssue = nil }
             } message: { Text(store.storageIssue ?? "") }
+    }
+
+    private func dropOnPageArrow(_ id: UUID, step: Int) -> Bool {
+        let next = group + step
+        guard (0..<groupCount).contains(next) else { return false }
+        let index = step > 0 ? next * 5 : next * 5 + 4
+        let accounts = store.visible
+        guard accounts.indices.contains(index), store.move(id, to: accounts[index].id) else { return false }
+        group = next
+        return true
     }
 
     private func navigate(_ id: UUID?) {
@@ -143,6 +165,8 @@ private struct Detail: View {
     let connectDesktop: () -> Void
     let connecting: Bool
     let message: String?
+    let signIn: () -> Void
+    let profileBusy: Bool
     let edit: () -> Void
     let close: () -> Void
 
@@ -152,7 +176,7 @@ private struct Detail: View {
                 ProviderLogo(provider: account.provider, size: 23)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(account.name).font(.system(size: 18, weight: .semibold, design: .default))
-                    Text([account.label.isEmpty ? nil : account.provider.name, account.reading?.identity]
+                    Text([account.label.isEmpty ? nil : account.provider.name, account.reading?.identity ?? account.claudeProfileEmail]
                         .compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(Color.quiet).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer()
@@ -172,6 +196,9 @@ private struct Detail: View {
                         }
                     }.padding(.vertical, 4)
                     if let issue = account.issue { Text(issue).font(.caption).foregroundStyle(.orange).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }
+                    if account.claudeProfileEmail != nil, account.reading == nil || account.issue != nil {
+                        Button(profileBusy ? "Checking Claude login…" : "Sign in to Claude", action: signIn).disabled(profileBusy)
+                    }
                     if account.isDesktopClaude && account.issue != nil {
                         Button(connecting ? "Connecting…" : "Connect Claude Desktop", action: connectDesktop).disabled(connecting)
                         if let message { Text(message).font(.caption).foregroundStyle(Color.quiet) }

@@ -90,6 +90,27 @@ struct UsageTests {
         #expect(account.innerMeter == nil)
     }
 
+    @Test func resetCountdownUsesTheClockAndExactBandBoundaries() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        func countdown(_ seconds: Double) -> ResetCountdown {
+            ResetCountdown(reset: now.addingTimeInterval(seconds), now: now)
+        }
+        #expect(ResetCountdown(reset: nil, now: now).proximity == .unknown)
+        #expect(countdown(-60).text == "due")
+        #expect(countdown(0).proximity == .due)
+        #expect(countdown(12).text == "<1m")
+        #expect(countdown(60).text == "1m")
+        #expect(countdown(3600).proximity == .withinHour)
+        #expect(countdown(3601).proximity == .withinSixHours)
+        #expect(countdown(5400).text == "1h 30m")
+        #expect(countdown(21600).proximity == .withinSixHours)
+        #expect(countdown(21601).proximity == .withinDay)
+        #expect(countdown(86400).proximity == .withinDay)
+        #expect(countdown(86401).proximity == .later)
+        #expect(countdown(180000).text == "2d 2h")
+        #expect(countdown(172800).compactText == "2d")
+    }
+
     @Test func lowRingStartsBelowTwentyPercentRemaining() {
         for (used, low) in [(79.9, false), (80, false), (80.1, true), (100, true)] {
             #expect(Meter(id: "w", title: "Weekly", percent: used).isLow == low)
@@ -113,6 +134,54 @@ struct UsageTests {
         #expect(openCode.priceText == "$40/mo list")
         openCode.customTier = "Custom"
         #expect(openCode.priceText == nil)
+    }
+
+    @Test func customOrderSurvivesRefreshAndHiddenAccounts() throws {
+        var state = SavedState()
+        let second = Account(provider: .claude, claudeProfileEmail: "second@example.com")
+        state.accounts.append(second)
+        let original = state.visibleAccounts.map(\.id)
+        state.move(second.id, by: 1)
+        let ordered = state.visibleAccounts.map(\.id)
+        #expect(ordered[2] == second.id)
+        #expect(ordered[1] == original[2])
+        state.merge([Observation(issue: "Primary login offline")], for: .claude)
+        #expect(state.accounts.first(where: { $0.id == second.id })?.issue == nil)
+        state.accounts[0].hidden = true
+        let restored = try JSONDecoder().decode(SavedState.self, from: JSONEncoder().encode(state))
+        #expect(restored.visibleAccounts.map(\.id) == Array(ordered.dropFirst()))
+    }
+
+    @Test func draggingToAnotherTileShiftsItsNeighborsAndPreservesHiddenSlots() {
+        var state = SavedState()
+        let hidden = Account(provider: .claude, hidden: true)
+        state.accounts.append(hidden)
+        let ids = state.visibleAccounts.map(\.id)
+        state.accountOrder = [ids[0], hidden.id, ids[1], ids[2], ids[3]]
+        let movedLater = state.move(ids[0], to: ids[3])
+        #expect(movedLater)
+        #expect(state.visibleAccounts.map(\.id) == [ids[1], ids[2], ids[3], ids[0]])
+        #expect(state.accountOrder?[1] == hidden.id)
+        let movedHidden = state.move(hidden.id, to: ids[0])
+        #expect(!movedHidden)
+        let movedToSelf = state.move(ids[1], to: ids[1])
+        #expect(!movedToSelf)
+        let movedEarlier = state.move(ids[0], to: ids[1])
+        #expect(movedEarlier)
+        #expect(state.visibleAccounts.map(\.id) == ids)
+    }
+
+    @Test func cornerBadgeHonorsTierAndEnteredPrice() {
+        var pro = Account(provider: .claude, customTier: "Pro")
+        #expect(pro.badgeAmount == 20)
+        pro.customTier = "Max 20x"
+        #expect(pro.badgeAmount == 200)
+        #expect(Account(provider: .codex, customTier: "Pro 500").badgeAmount == 500)
+        pro.customPrice = "€19.95/month"
+        #expect(pro.badgeAmount == Decimal(string: "19.95"))
+        pro.customPrice = "$20 then $40/mo"
+        #expect(pro.badgeAmount == nil)
+        #expect(Account(provider: .opencodego).badgeAmount == nil)
     }
 
     @Test func remainingAllowanceUsesExistingStoredPercent() throws {

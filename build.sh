@@ -9,5 +9,6 @@ ditto "$bin_dir/TokenBurn_TokenBurn.bundle" "$bundle/Contents/Resources/TokenBur
 cp Resources/Info.plist "$bundle/Contents/Info.plist"
 cp Resources/AppIcon.icns "$bundle/Contents/Resources/AppIcon.icns"
 cp "$bin_dir/TokenBurn" "$bundle/Contents/MacOS/TokenBurn"
+strip -S -x "$bundle/Contents/MacOS/TokenBurn"
 codesign --force --sign - "$bundle"
 echo "$bundle"

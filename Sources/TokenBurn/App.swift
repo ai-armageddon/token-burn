@@ -10,12 +10,20 @@ final class FloatingPanel: NSPanel {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let store = Store()
     private var panel: FloatingPanel!
+    private var host: NSHostingView<Widget>?
+    private let canvas = NSView()
+    private let grip = WindowResizeGrip()
+    private var layoutSize = CGSize(width: 428, height: 241)
+    private let scaleKey = "TokenBurnWindowScale"
+    private var scale: CGFloat = 1
     private var item: NSStatusItem!
     private var token: AnyCancellable?
     private let originKey = "TokenBurnPanelOrigin"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let size = NSSize(width: 428, height: 190)
+        let savedScale = UserDefaults.standard.double(forKey: scaleKey)
+        if savedScale.isFinite && savedScale > 0 { scale = min(2, max(0.65, savedScale)) }
+        let size = NSSize(width: layoutSize.width * scale, height: layoutSize.height * scale)
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let fallback = NSPoint(x: screen.maxX - size.width - 20, y: screen.maxY - 20)
         let saved = UserDefaults.standard.string(forKey: originKey).map(NSPointFromString)
@@ -28,15 +36,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.hidesOnDeactivate = false
-        panel.isMovableByWindowBackground = true
+        panel.isMovableByWindowBackground = false
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         let widget = Widget(store: store, resize: { [weak self] size in self?.resize(size) },
                             minimize: { [weak self] in self?.panel.miniaturize(nil) })
         let host = NSHostingView(rootView: widget)
         host.sizingOptions = []
-        panel.contentView = host
+        self.host = host
+        panel.contentView = canvas
+        canvas.addSubview(host)
+        canvas.addSubview(grip, positioned: .above, relativeTo: host)
+        grip.toolTip = "Drag to resize Token Burn"
+        grip.changeScale = { [weak self] value, finished in
+            guard let self else { return }
+            self.scale = min(2, max(0.65, value))
+            self.resize(self.layoutSize)
+            if finished { UserDefaults.standard.set(self.scale, forKey: self.scaleKey) }
+        }
         panel.setFrameTopLeftPoint(top)
+        resize(layoutSize)
         token = store.$state.map(\.pinned).removeDuplicates().sink { [weak self] pinned in
             self?.panel.level = pinned ? .floating : .normal
         }
@@ -70,15 +89,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func resize(_ size: CGSize) {
+        layoutSize = size
+        guard let host else { return }
+        let bounds = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame
+        let appliedScale = min(scale, (bounds?.width ?? size.width * scale) / size.width,
+                               (bounds?.height ?? size.height * scale) / size.height)
         var frame = panel.frame
         let top = frame.maxY
-        frame.size = size
-        frame.origin.y = top - size.height
-        if let bounds = panel.screen?.visibleFrame {
-            frame.origin.y = max(bounds.minY, min(frame.origin.y, bounds.maxY - size.height))
+        frame.size = CGSize(width: (size.width * appliedScale).rounded(), height: (size.height * appliedScale).rounded())
+        frame.origin.y = top - frame.height
+        if let bounds {
+            frame.origin.y = max(bounds.minY, min(frame.origin.y, bounds.maxY - frame.height))
             frame.origin.x = max(bounds.minX, min(frame.origin.x, bounds.maxX - frame.width))
         }
         panel.setFrame(frame, display: true)
+        // SwiftUI lays out in logical points. AppKit scales the host and its native
+        // mouse targets together, preserving tile dragging and editable controls.
+        host.frame = canvas.bounds
+        host.bounds = CGRect(origin: .zero, size: size)
+        grip.baseSize = size
+        grip.frame = CGRect(x: canvas.bounds.maxX - 18, y: 0, width: 18, height: 18)
+        panel.invalidateCursorRects(for: grip)
     }
 
     @objc private func rememberPosition() {

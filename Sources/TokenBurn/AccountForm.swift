@@ -7,6 +7,7 @@ struct AccountForm: View {
     let done: (UUID?) -> Void
     let close: () -> Void
     @ViewState private var live = true
+    @ViewState private var loginEmail = ""
     @ViewState private var provider: Provider
     @ViewState private var label: String
     @ViewState private var tier: String
@@ -51,17 +52,25 @@ struct AccountForm: View {
                 }.pickerStyle(.segmented).labelsHidden()
             }
             if original == nil && live {
-                Text("Choose Add to put another account on the widget. Manage logins in CodexBar.")
+                Text("Use the arrows to order your accounts. Choose Add to show another account.")
                     .font(.callout).foregroundStyle(Color.quiet).fixedSize(horizontal: false, vertical: true)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
-                        ForEach(store.state.accounts.filter { !$0.manual || $0.hidden }) { account in
+                        ForEach(store.visible + store.state.accounts.filter(\.hidden)) { account in
                             HStack {
                                 ProviderLogo(provider: account.provider, size: 14)
                                 Text(account.name).font(.caption).fontWeight(.semibold)
                                 Text(account.accountLabel ?? (account.manual ? "Manual" : "Default account"))
                                     .font(.caption).foregroundStyle(Color.quiet).lineLimit(1).truncationMode(.middle)
                                 Spacer()
+                                if !account.hidden {
+                                    GlyphButton(symbol: "chevron.up", help: "Move \(account.name) earlier") {
+                                        store.move(account.id, by: -1)
+                                    }.disabled(store.visible.first?.id == account.id)
+                                    GlyphButton(symbol: "chevron.down", help: "Move \(account.name) later") {
+                                        store.move(account.id, by: 1)
+                                    }.disabled(store.visible.last?.id == account.id)
+                                }
                                 Button(account.hidden ? "Add" : "View") {
                                     if account.hidden { store.showAccount(account.id) }
                                     done(account.id)
@@ -69,6 +78,12 @@ struct AccountForm: View {
                             }.padding(.vertical, 2)
                         }
                     }
+                }
+                HStack {
+                    TextField("Claude account email", text: $loginEmail).textFieldStyle(.roundedBorder)
+                    Button("Add Claude login") {
+                        done(store.addClaudeProfile(loginEmail.trimmingCharacters(in: .whitespacesAndNewlines)))
+                    }.disabled(!loginEmail.contains("@") || loginEmail.contains(" "))
                 }
                 if let connectionMessage { Text(connectionMessage).font(.caption).foregroundStyle(.orange) }
                 HStack {
