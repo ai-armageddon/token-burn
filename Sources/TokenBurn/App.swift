@@ -114,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
         for (title, action) in [(panel.isMiniaturized ? "Restore Deck" : panel.isVisible ? "Hide Deck" : "Show Deck", #selector(togglePanel)),
                                 (store.state.pinned ? "Unpin Window" : "Pin Above Other Windows", #selector(togglePin)),
-                                ("Refresh Usage", #selector(refresh))] {
+                                (store.needsCodexBar ? "Set Up Live Tracking…" : "Refresh Usage", #selector(refresh))] {
             menu.addItem(withTitle: title, action: action, keyEquivalent: "").target = self
         }
         menu.addItem(.separator())
@@ -122,7 +122,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc private func togglePanel() { if panel.isVisible && !panel.isMiniaturized { panel.orderOut(nil) } else { show() } }
     @objc private func togglePin() { store.setPinned(!store.state.pinned) }
-    @objc private func refresh() { store.refresh() }
+    @objc private func refresh() {
+        if store.needsCodexBar { show() }
+        store.userRefresh()
+    }
     private func show() {
         if panel.isMiniaturized { panel.deminiaturize(nil) }
         NSApp.activate(ignoringOtherApps: true)

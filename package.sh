@@ -57,6 +57,7 @@ CASK
 
   depends_on macos: ">= :sonoma"
   depends_on arch: :$brew_arch
+  depends_on cask: "codexbar"
 
   app "Token Burn.app"
 end

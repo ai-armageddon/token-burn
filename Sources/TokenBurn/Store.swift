@@ -90,6 +90,13 @@ final class Store: ObservableObject {
     @Published private(set) var state: SavedState
     @Published private(set) var refreshing = Set<Provider>()
     @Published var storageIssue: String?
+    @Published private(set) var needsCodexBar = false
+    @Published private(set) var setupTool: LiveTool?
+    @Published private(set) var installingTool: LiveTool?
+    @Published private(set) var setupMessage: String?
+    let toolPaths: ToolPaths
+    private let defaults: UserDefaults
+    private var pendingSignIn: UUID?
     private let file: URL
     private var canSave = true
     private var timer: Timer?
@@ -101,8 +108,10 @@ final class Store: ObservableObject {
         state.visibleAccounts
     }
 
-    init() {
-        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    init(toolPaths: ToolPaths = .system, defaults: UserDefaults = .standard, stateDirectory: URL? = nil) {
+        self.toolPaths = toolPaths
+        self.defaults = defaults
+        let directory = stateDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Token Burn", isDirectory: true)
         file = directory.appendingPathComponent("accounts.json")
         state = SavedState()
@@ -120,6 +129,9 @@ final class Store: ObservableObject {
     }
 
     func start() {
+        if toolPaths.missing(forClaudeLogin: false) != nil && !defaults.bool(forKey: "DeferredCodexBarSetup") {
+            requestSetup(.codexbar)
+        }
         scheduleExpiry()
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
@@ -127,7 +139,62 @@ final class Store: ObservableObject {
         }
     }
 
+    func requestSetup(_ tool: LiveTool) {
+        setupMessage = nil
+        setupTool = tool
+    }
+
+    func dismissSetup() {
+        if setupTool == .codexbar { defaults.set(true, forKey: "DeferredCodexBarSetup") }
+        pendingSignIn = nil
+        setupTool = nil
+        setupMessage = nil
+    }
+
+    func installDependency(_ tool: LiveTool) {
+        guard installingTool == nil, setupTool == tool else { return }
+        if checkSetup() { return }
+        installingTool = tool
+        setupMessage = nil
+        let paths = toolPaths
+        Task {
+            do {
+                try await Task.detached(priority: .userInitiated) { try paths.install(tool) }.value
+                installingTool = nil
+                if !checkSetup() { refresh() }
+            } catch {
+                installingTool = nil
+                if setupTool == tool { setupMessage = error.localizedDescription }
+            }
+        }
+    }
+
+    @discardableResult
+    func checkSetup(showMissingMessage: Bool = false) -> Bool {
+        guard let tool = setupTool, installingTool == nil else { return false }
+        guard toolPaths.executable(tool.rawValue) != nil else {
+            if showMissingMessage { setupMessage = "Still looking for \(tool.name). Finish installation, then check again." }
+            return false
+        }
+        setupTool = nil
+        setupMessage = nil
+        if tool == .codexbar { defaults.removeObject(forKey: "DeferredCodexBarSetup") }
+        if let id = pendingSignIn, let account = state.accounts.first(where: { $0.id == id }) {
+            pendingSignIn = nil
+            refreshProfile(account, signIn: true)
+        }
+        refresh()
+        return true
+    }
+
+    func userRefresh() {
+        if setupTool != nil { checkSetup(showMissingMessage: true) }
+        else if toolPaths.executable("codexbar") == nil { requestSetup(.codexbar) }
+        else { refresh() }
+    }
+
     func connectDesktop() {
+        guard toolPaths.executable("codexbar") != nil else { requestSetup(.codexbar); return }
         guard !connectingDesktop else { return }
         connectingDesktop = true
         desktopMessage = nil
@@ -174,6 +241,15 @@ final class Store: ObservableObject {
     }
 
     func refreshProfile(_ account: Account, signIn: Bool) {
+        if let missing = toolPaths.missing(forClaudeLogin: true) {
+            if signIn {
+                pendingSignIn = account.id
+                requestSetup(missing)
+            } else if account.issue != "Install \(missing.name) to refresh this login." {
+                update(account.id) { $0.issue = "Install \(missing.name) to refresh this login." }
+            }
+            return
+        }
         guard refreshingProfiles.insert(account.id).inserted else { return }
         Task {
             do {
@@ -190,12 +266,15 @@ final class Store: ObservableObject {
     private var retryDesktop = false
 
     func refresh() {
+        needsCodexBar = toolPaths.missing(forClaudeLogin: false) != nil
+        guard !needsCodexBar else { return }
+        defaults.removeObject(forKey: "DeferredCodexBarSetup")
         for provider in Provider.allCases { refresh(provider) }
         for account in visible where account.claudeProfileEmail != nil { refreshProfile(account, signIn: false) }
     }
 
     private func refresh(_ provider: Provider) {
-        guard refreshing.insert(provider).inserted else { return }
+        guard toolPaths.executable("codexbar") != nil, refreshing.insert(provider).inserted else { return }
         let desktopKeys = Set(state.accounts.filter { $0.isDesktopClaude && !$0.hidden }.compactMap(\.key))
         Task {
             let result = await Task.detached(priority: .utility) { UsageFeed.fetch(provider, desktopKeys: desktopKeys) }.value

@@ -187,21 +187,15 @@ enum UsageFeed {
     }
 
     static func execute(_ arguments: [String], environment: [String: String] = [:], executable: String = "codexbar") throws -> Data {
-        let files = FileManager.default
-        let home = files.homeDirectoryForCurrentUser.path
-        let envPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
-        let paths = ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/.local/bin", "\(home)/.grok/bin", "\(home)/.opencode/bin",
-                     "/Applications/CodexBar.app/Contents/Helpers"]
-        let bins = paths + envPath.components(separatedBy: ":").filter { $0.hasPrefix("/") }
-        let candidates = bins.map { $0 + "/" + executable } + (executable == "codexbar" ? ["/Applications/CodexBar.app/Contents/Helpers/CodexBarCLI"] : [])
-        guard let binary = candidates.first(where: files.isExecutableFile(atPath:)) else {
+        let paths = ToolPaths.system
+        guard let binary = paths.executable(executable) else {
             throw FeedError.message("Install the \(executable) CLI to connect this account.")
         }
         let process = Process(), output = Pipe()
         process.executableURL = URL(fileURLWithPath: binary)
         process.arguments = arguments
         var env = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
-        env["PATH"] = bins.joined(separator: ":")
+        env["PATH"] = paths.bins.joined(separator: ":")
         if environment["CLAUDE_CONFIG_DIR"] != nil {
             for key in ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] { env.removeValue(forKey: key) }
         }

@@ -52,7 +52,7 @@ struct AccountForm: View {
                 }.pickerStyle(.segmented).labelsHidden()
             }
             if original == nil && live {
-                Text("Use the arrows to order your accounts. Choose Add to show another account.")
+                Text("Sign in to Claude here. For Codex, OpenCode Go, or Grok, configure the login in CodexBar, then refresh and choose Add.")
                     .font(.callout).foregroundStyle(Color.quiet).fixedSize(horizontal: false, vertical: true)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
@@ -87,7 +87,8 @@ struct AccountForm: View {
                 }
                 if let connectionMessage { Text(connectionMessage).font(.caption).foregroundStyle(.orange) }
                 HStack {
-                    Button("Open CodexBar") {
+                    Button(store.needsCodexBar ? "Set up CodexBar" : "Open CodexBar") {
+                        if store.needsCodexBar { store.requestSetup(.codexbar); return }
                         if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.steipete.codexbar")
                             ?? (FileManager.default.fileExists(atPath: "/Applications/CodexBar.app") ? URL(fileURLWithPath: "/Applications/CodexBar.app") : nil) {
                             NSWorkspace.shared.openApplication(at: app, configuration: .init()) { _, error in
@@ -96,7 +97,7 @@ struct AccountForm: View {
                         } else { NSWorkspace.shared.open(URL(string: "https://codexbar.app")!) }
                     }
                     Spacer()
-                    Button("Refresh accounts") { store.refresh() }.disabled(!store.refreshing.isEmpty)
+                    Button("Refresh accounts") { store.userRefresh() }.disabled(!store.refreshing.isEmpty)
                 }
             } else {
                 ScrollView {

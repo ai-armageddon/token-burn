@@ -9,12 +9,13 @@ struct Widget: View {
     let resize: (CGSize) -> Void
     let minimize: () -> Void
     @AppStorage("TokenBurnCompactMode") private var prefersCompact = false
-    private var compact: Bool { prefersCompact && page == .deck }
+    private var compact: Bool { prefersCompact && page == .deck && store.setupTool == nil }
     private var size: CGSize { CGSize(width: compact ? 298 : 428, height: height) }
     @ViewState private var page: PanelPage = .deck
     @ViewState private var group = 0
     private var groupCount: Int { max(1, (store.visible.count + 4) / 5) }
     private var height: CGFloat {
+        if store.setupTool != nil { return 276 }
         switch page {
         case .deck: return compact ? (groupCount > 1 ? 140 : 120) : 241
         case .detail: return 505
@@ -38,7 +39,7 @@ struct Widget: View {
                         .accessibilityHidden(true)
                     if !compact { Text("TOKEN BURN").font(.system(size: 14, weight: .black)).tracking(-0.5) }
                     if !compact { Divider().frame(height: 12).padding(.horizontal, 2) }
-                    Text("Deck").font(.system(size: compact ? 11 : 13, weight: .semibold))
+                    Text(store.setupTool == nil ? "Deck" : "Setup").font(.system(size: compact ? 11 : 13, weight: .semibold))
                         .foregroundStyle(Color.quiet)
                     Spacer(minLength: 0)
                 }.frame(maxHeight: .infinity).overlay { WindowDragArea().frame(maxWidth: .infinity, maxHeight: .infinity) }
@@ -48,78 +49,22 @@ struct Widget: View {
                     prefersCompact = !compact
                     page = .deck
                 }
+                .disabled(store.setupTool != nil)
                 GlyphButton(symbol: store.state.pinned ? "pin.fill" : "pin", help: store.state.pinned ? "Unpin window" : "Keep above other windows", lit: store.state.pinned) {
                     store.setPinned(!store.state.pinned)
                 }
-                GlyphButton(symbol: "arrow.clockwise", help: "Refresh all accounts") { store.refresh() }
+                GlyphButton(symbol: "arrow.clockwise", help: store.needsCodexBar ? "Set up live tracking" : "Refresh all accounts") { store.userRefresh() }
                     .disabled(!store.refreshing.isEmpty)
                 GlyphButton(symbol: "plus", help: "Add or restore an account", lit: page == .add) {
+                    if store.setupTool != nil { store.dismissSetup() }
                     page = page == .add ? .deck : .add
                 }
             }.padding(.horizontal, compact ? 9 : 15).frame(height: compact ? 30 : 44)
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
-            HStack(spacing: 6) {
-                let accounts = Array(store.visible.dropFirst(min(group, groupCount - 1) * 5).prefix(5))
-                ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
-                    let duplicates = store.visible.filter { $0.provider == account.provider }.count > 1
-                    RingTile(account: account, width: compact ? 54 : (store.visible.count >= 5 ? 76 : 95), compact: compact, subtitle: subtitle(account, duplicates: duplicates), selected: page == .detail(account.id), drop: { dragged in
-                        withAnimation(.easeOut(duration: 0.16)) { store.move(dragged, to: account.id) }
-                    }) {
-                        page = page == .detail(account.id) ? .deck : .detail(account.id)
-                    }
-                    .overlay(alignment: .trailing) {
-                        if index + 1 < accounts.count, accounts[index + 1].provider != account.provider {
-                            Rectangle().fill(.white.opacity(0.22)).frame(width: 1, height: compact ? 38 : 62)
-                                .offset(x: 3.5).allowsHitTesting(false)
-                        }
-                    }
-                }
-                if store.visible.isEmpty {
-                    Button("Add an account") { page = .add }.buttonStyle(.bordered)
-                }
-            }.frame(maxWidth: .infinity).frame(height: compact ? 89 : 168)
-            if !compact || groupCount > 1 {
-                HStack(spacing: 5) {
-                    Circle().fill(store.refreshing.isEmpty ? Color.quiet : Color.signal).frame(width: 5, height: 5)
-                    Text(store.refreshing.isEmpty ? "\(store.visible.count) \(store.visible.count == 1 ? "account" : "accounts")" : "Refreshing…")
-                    Spacer()
-                    Text("AUTO 5 MIN").tracking(0.6).foregroundStyle(Color.quiet)
-                    if groupCount > 1 {
-                        Button { group -= 1 } label: { Image(systemName: "chevron.left") }.disabled(group == 0).help("Previous accounts")
-                            .overlay {
-                                if group > 0 {
-                                    AccountDragArea(help: "Previous accounts", click: { group -= 1 }, drop: { dropOnPageArrow($0, step: -1) })
-                                }
-                            }
-                        Text("\(group + 1) / \(groupCount)").monospacedDigit()
-                        Button { group += 1 } label: { Image(systemName: "chevron.right") }.disabled(group + 1 >= groupCount).help("Next accounts")
-                            .overlay {
-                                if group + 1 < groupCount {
-                                    AccountDragArea(help: "Next accounts", click: { group += 1 }, drop: { dropOnPageArrow($0, step: 1) })
-                                }
-                            }
-                    }
-                }.font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(Color.quiet).buttonStyle(.plain)
-                    .padding(.horizontal, 18).frame(height: compact ? 20 : 28)
-            }
-            if page != .deck {
-                Divider()
-                switch page {
-                case .detail(let id):
-                    if let account = store.state.accounts.first(where: { $0.id == id }) {
-                        Detail(account: account, choose: { key in store.update(id) { $0.preferred = key } },
-                               connectDesktop: { store.connectDesktop() }, connecting: store.connectingDesktop, message: store.desktopMessage,
-                               signIn: { store.refreshProfile(account, signIn: true) }, profileBusy: store.refreshingProfiles.contains(id),
-                               edit: { page = .edit(id) }, close: { page = .deck })
-                    }
-                case .edit(let id):
-                    if let account = store.state.accounts.first(where: { $0.id == id }) {
-                        AccountForm(store: store, original: account, done: navigate, close: { page = .detail(id) }).id(id)
-                    }
-                case .add:
-                    AccountForm(store: store, original: nil, done: navigate, close: { page = .deck })
-                case .deck: EmptyView()
-                }
+            if let tool = store.setupTool {
+                DependencySetup(store: store, tool: tool)
+            } else {
+                deckContents
             }
         }.frame(width: size.width, height: size.height, alignment: .top)
             .foregroundStyle(Color.ink).background(Color.surface)
@@ -127,11 +72,83 @@ struct Widget: View {
             .overlay { RoundedRectangle(cornerRadius: 11).strokeBorder(.white.opacity(0.14), lineWidth: 1).allowsHitTesting(false) }
             .preferredColorScheme(.dark)
             .onChange(of: size, initial: true) { _, value in resize(value) }
+            .onChange(of: store.setupTool) { old, new in
+                if old == .codexbar, new == nil, !store.needsCodexBar, page == .deck { page = .add }
+            }
             .onChange(of: groupCount) { _, value in group = min(group, value - 1) }
-            .onExitCommand { page = .deck }
+            .onExitCommand {
+                if store.setupTool != nil { store.dismissSetup() }
+                page = .deck
+            }
             .alert("Account storage", isPresented: Binding(get: { store.storageIssue != nil }, set: { if !$0 { store.storageIssue = nil } })) {
                 Button("OK") { store.storageIssue = nil }
             } message: { Text(store.storageIssue ?? "") }
+    }
+
+    @ViewBuilder private var deckContents: some View {
+        HStack(spacing: 6) {
+            let accounts = Array(store.visible.dropFirst(min(group, groupCount - 1) * 5).prefix(5))
+            ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
+                let duplicates = store.visible.filter { $0.provider == account.provider }.count > 1
+                RingTile(account: account, width: compact ? 54 : (store.visible.count >= 5 ? 76 : 95), compact: compact, subtitle: subtitle(account, duplicates: duplicates), selected: page == .detail(account.id), drop: { dragged in
+                    withAnimation(.easeOut(duration: 0.16)) { store.move(dragged, to: account.id) }
+                }) {
+                    page = page == .detail(account.id) ? .deck : .detail(account.id)
+                }
+                .overlay(alignment: .trailing) {
+                    if index + 1 < accounts.count, accounts[index + 1].provider != account.provider {
+                        Rectangle().fill(.white.opacity(0.22)).frame(width: 1, height: compact ? 38 : 62)
+                            .offset(x: 3.5).allowsHitTesting(false)
+                    }
+                }
+            }
+            if store.visible.isEmpty {
+                Button("Add an account") { page = .add }.buttonStyle(.bordered)
+            }
+        }.frame(maxWidth: .infinity).frame(height: compact ? 89 : 168)
+        if !compact || groupCount > 1 {
+            HStack(spacing: 5) {
+                Circle().fill(store.refreshing.isEmpty ? Color.quiet : Color.signal).frame(width: 5, height: 5)
+                Text(store.refreshing.isEmpty ? "\(store.visible.count) \(store.visible.count == 1 ? "account" : "accounts")" : "Refreshing…")
+                Spacer()
+                Text("AUTO 5 MIN").tracking(0.6).foregroundStyle(Color.quiet)
+                if groupCount > 1 {
+                    Button { group -= 1 } label: { Image(systemName: "chevron.left") }.disabled(group == 0).help("Previous accounts")
+                        .overlay {
+                            if group > 0 {
+                                AccountDragArea(help: "Previous accounts", click: { group -= 1 }, drop: { dropOnPageArrow($0, step: -1) })
+                            }
+                        }
+                    Text("\(group + 1) / \(groupCount)").monospacedDigit()
+                    Button { group += 1 } label: { Image(systemName: "chevron.right") }.disabled(group + 1 >= groupCount).help("Next accounts")
+                        .overlay {
+                            if group + 1 < groupCount {
+                                AccountDragArea(help: "Next accounts", click: { group += 1 }, drop: { dropOnPageArrow($0, step: 1) })
+                            }
+                        }
+                }
+            }.font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(Color.quiet).buttonStyle(.plain)
+                .padding(.horizontal, 18).frame(height: compact ? 20 : 28)
+        }
+        if page != .deck {
+            Divider()
+            switch page {
+            case .detail(let id):
+                if let account = store.state.accounts.first(where: { $0.id == id }) {
+                    Detail(account: account, choose: { key in store.update(id) { $0.preferred = key } },
+                           connectDesktop: { store.connectDesktop() }, connecting: store.connectingDesktop, message: store.desktopMessage,
+                           signIn: { store.refreshProfile(account, signIn: true) }, profileBusy: store.refreshingProfiles.contains(id),
+                           edit: { page = .edit(id) }, close: { page = .deck })
+                }
+            case .edit(let id):
+                if let account = store.state.accounts.first(where: { $0.id == id }) {
+                    AccountForm(store: store, original: account, done: navigate, close: { page = .detail(id) }).id(id)
+                }
+            case .add:
+                AccountForm(store: store, original: nil, done: navigate, close: { page = .deck })
+            case .deck: EmptyView()
+            }
+        }
     }
 
     private func dropOnPageArrow(_ id: UUID, step: Int) -> Bool {
@@ -153,6 +170,7 @@ struct Widget: View {
 
     private func subtitle(_ account: Account, duplicates: Bool) -> String {
         if account.stale { return "Last reading" }
+        if !account.manual && store.needsCodexBar { return "Setup needed" }
         guard let meter = account.meter else { return account.isDesktopClaude ? "Connect" : (account.issue == nil ? "Connecting…" : "Check login") }
         let qualifier = account.manual ? "Manual" : account.reading?.estimated == true ? "Est." : ""
         let text: String
