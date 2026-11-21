@@ -8,7 +8,7 @@ The screenshots use fictional accounts and example usage. Ava’s Claude Pro acc
 
 ## Install on macOS
 
-Token Burn targets macOS 14 or later. Open the Token Burn DMG for your Mac’s architecture, drag **Token Burn.app** onto **Applications**, then open it from Applications. A locally built `dist/Token Burn.app` can also be copied directly. The Deck appears on your desktop, and its green rings appear in the menu bar.
+Token Burn targets macOS 14 or later. To install this source release, follow the build instructions below. If you have a packaged DMG for your Mac’s architecture, open it and drag **Token Burn.app** onto **Applications**. A locally built `dist/Token Burn.app` can also be copied directly. The Deck appears on your desktop, and its green rings appear in the menu bar.
 
 ### Build from source
 
@@ -25,7 +25,7 @@ The script builds an app for your Mac’s architecture and signs it locally. You
 
 Run `./package.sh` to build a DMG with an Applications shortcut and a checksum-pinned cask in `dist/Casks/token-burn.rb`. The default cask reads the DMG beside the tap’s `Casks/` directory. Its architecture and minimum macOS requirements match the packaged app.
 
-For a hosted GitHub release, pass the real project URL to `./package.sh https://github.com/OWNER/REPO`. Upload the **same generated DMG** to that repository’s `v<version>` release and put the generated Ruby file in the tap’s `Casks/` directory. Once published, users can install with `brew install --cask OWNER/TAP/token-burn`. Homebrew places Token Burn in Applications by default. The build script signs locally; a public notarized binary release requires Developer ID signing and notarization.
+For a hosted GitHub release, pass the real project URL to `./package.sh https://github.com/ai-armageddon/token-burn`. Upload the **same generated DMG** to that repository’s `v<version>` release and put the generated Ruby file in the tap’s `Casks/` directory. Once published, users can install with `brew install --cask OWNER/TAP/token-burn`. Homebrew places Token Burn in Applications by default. The build script signs locally; a public notarized binary release requires Developer ID signing and notarization.
 
 ### Get live readings
 
@@ -70,4 +70,4 @@ Run `./test.sh` to check account reconciliation and usage decoding.
 
 [CodexBar CLI and account setup](https://github.com/steipete/CodexBar/blob/main/docs/cli.md)
 
-Provider marks come from the CodexBar provider icon set and the [OpenCode brand assets](https://opencode.ai/brand).
+Provider marks come from CodexBar and OpenCode. [Third-party notices](Resources/ThirdPartyNotices.txt)
