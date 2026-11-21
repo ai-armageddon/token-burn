@@ -2,14 +2,26 @@
 
 Token Burn is a macOS app for tracking AI subscriptions. Its main view, the **Deck**, keeps your accounts visible across desktops. Each ring shows the percentage of allowance left for Claude, Codex, OpenCode Go or Grok. Each provider logo sits inside its allowance rings. The outer ring shows the selected window and the inner ring shows a second reported window when available. Dividers separate providers. The arc is green at 20% remaining or above, and red below 20%. An unknown balance has a gray ring.
 
-## Run
+## Install on macOS
 
-Requires macOS 14 or later. Install the Xcode Command Line Tools to build from source. Automatic readings use the CodexBar CLI (tested with 0.84.0) and your existing provider logins. The app also supports manually entered usage.
+Token Burn targets macOS 14 or later. If you already have a locally built `dist/Token Burn.app`, drag it into **Applications** and double-click **Token Burn**. The Deck appears on your desktop, and its green rings appear in the menu bar.
+
+### Build from source
+
+Install current Xcode Command Line Tools with `xcode-select --install` if needed. Once the installation finishes, run these commands from the project folder.
 
 ```sh
 ./build.sh
 open "dist/Token Burn.app"
 ```
+
+The script builds an app for your Mac’s architecture and signs it locally. You can move the resulting app into Applications.
+
+### Get live readings
+
+Install CodexBar in Applications or put its CLI on your path. With Homebrew, run `brew install --cask codexbar`. Sign in to the providers you use, then click the refresh arrow in the Deck. Token Burn also accepts manual readings through **+ → Manual entry**. [CodexBar installation](https://github.com/steipete/CodexBar#install)
+
+## Using the Deck
 
 Drag the dotted grip or title to move the panel. Drag the bottom-right grip to make the widget smaller or larger. Its scale is saved across launches. The diagonal arrows switch between full and compact layouts. Click the minus button to minimize, then choose **Restore Deck** from its menu-bar icon. The pin keeps it above other windows. The green usage rings in the menu bar open the Deck controls.
 
@@ -18,7 +30,7 @@ Drag the dotted grip or title to move the panel. Drag the bottom-right grip to m
 - Hover over a ring for a summary. Click it for the account, plan, usage windows, reset times and last update. Select a window to display its remaining percentage on the ring. An orange dot means the account has banked resets. Hover or expand for the count and reported expirations. Claude may report only the next expiry.
 - Drag an account tile onto another tile to move it into that position. A click opens details. With multiple pages, drop on a page arrow to move across the page boundary. The arrows in **+ → Connected accounts** also change the order. Each account keeps its position across refreshes and restarts.
 - Each tile shows its numeric price in a colored corner badge when a single price is known. The clock beside the badge counts down to the outer ring’s reset and updates every minute. Green means within an hour, amber within six hours, blue within a day and purple beyond a day. A dash means the provider did not supply a reset time. A past reset shows “due” until a new reading arrives. Hover for the exact local reset time, currency, billing period and price source.
-- To add a separate Claude login, enter the email in **+ → Connected accounts → Add Claude login** and finish the Claude browser authorization. Each login uses its own Claude Code profile. Token Burn checks the email before displaying its allowances.
+- To add a separate Claude login, install the Claude Code CLI, enter the email in **+ → Connected accounts → Add Claude login** and finish the Claude browser authorization. Each login uses its own Claude Code profile. Token Burn checks the email before displaying its allowances.
 - Full-size rings display the account tier and price. Compact rings include them on hover. A price marked **list** is the published US monthly web rate for a recognized tier. The pencil lets you enter your billed price with its currency and interval, or supply a missing tier. Clearing a field restores automatic display.
 - Click the pencil to name the account. Click **+** to see connected accounts, add discovered accounts or bring back hidden rings, or add a manual account with a label, remaining percentage and optional reset.
 - To show a distinct Claude Desktop login, use **+ → Connected accounts → Add**. If it says **Connect**, open its details and click **Connect Claude Desktop** to authorize CodexBar in macOS Keychain.
