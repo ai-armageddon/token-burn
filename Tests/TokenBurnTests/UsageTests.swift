@@ -201,6 +201,18 @@ struct UsageTests {
         #expect(bank.available(at: .distantFuture).count == 0)
     }
 
+    @Test func missingClaudeResetInventoryHasSourceSpecificExplanation() throws {
+        for source in ["claude", "cli", "oauth", "web"] {
+            let rows = try read("""
+                [{"provider":"claude","source":"\(source)","usage":{"primary":{"usedPercent":1}}}]
+                """)
+            let account = Account(provider: .claude, reading: rows.first?.reading)
+            #expect(account.claudeResetNote != nil)
+            #expect(account.claudeResetNote?.contains("CLI") == ["cli", "claude"].contains(source))
+            #expect(account.reading?.bankedResets == nil)
+        }
+    }
+
     @Test func claudeBankSummaryStaysAccountScoped() throws {
         let data = #"[{"provider":"claude","account":"one","usage":{"primary":{"usedPercent":2},"details":[{"rows":[{"label":"Limit Reset Credits","value":"2 available","secondaryValue":"Expires Dec 1 at 08:00"}]}]}},{"provider":"claude","account":"two","usage":{"primary":{"usedPercent":14}}}]"#
         let rows = try read(data)

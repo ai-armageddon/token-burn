@@ -220,6 +220,10 @@ private struct Detail: View {
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
                     }
+                    if let note = account.claudeResetNote {
+                        Label(note, systemImage: "arrow.counterclockwise.circle").font(.caption)
+                            .foregroundStyle(Color.quiet)
+                    }
                     ForEach(account.reading?.meters ?? []) { meter in
                         Button { choose(meter.id) } label: {
                             HStack(spacing: 9) {

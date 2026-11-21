@@ -56,3 +56,13 @@ struct BankedResets: Codable, Equatable {
         return nil
     }
 }
+
+extension Account {
+    var claudeResetNote: String? {
+        guard provider == .claude, !manual, let reading, reading.bankedResets == nil else { return nil }
+        switch reading.source.lowercased() {
+        case "claude", "cli": return "Banked resets unavailable from the Claude CLI."
+        default: return "Claude did not report a banked-reset count in this reading."
+        }
+    }
+}

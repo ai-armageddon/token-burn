@@ -176,6 +176,7 @@ struct RingTile: View {
                 parts.append("\(bank.count) banked " + (bank.count == 1 ? "reset" : "resets"))
                 parts += bank.lines
             }
+            if let note = account.claudeResetNote { parts.append(note) }
             parts.append((reading.estimated ? "Local estimate · " : "") + "Updated " + reading.updated.formatted())
         }
         if let issue = account.issue { parts.append(issue) }

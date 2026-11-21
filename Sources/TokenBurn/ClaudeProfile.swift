@@ -25,7 +25,18 @@ enum ClaudeProfile {
               identity.caseInsensitiveCompare(email) == .orderedSame else {
             throw FeedError.message("Sign in to Claude with \(email) to connect this account.")
         }
-        let report = try UsageFeed.execute(["usage", "--provider", "claude", "--source", "cli", "--json"], environment: env)
+        // OAuth can include saved resets. Only use the reading if its reported
+        // owner matches this isolated login; the CLI remains the quota fallback.
+        if let reading = try? fetchUsage(source: "oauth", email: email, environment: env),
+           reading.source == "oauth" {
+            return reading
+        }
+        return try fetchUsage(source: "cli", email: email, environment: env)
+    }
+
+    private static func fetchUsage(source: String, email: String, environment: [String: String]) throws -> Reading {
+        let report = try UsageFeed.execute(["usage", "--provider", "claude", "--source", source, "--json"],
+                                           environment: environment)
         let rows = try UsageFeed.parse(report, provider: .claude)
         guard let reading = rows.compactMap(\.reading).first(where: { $0.identity?.caseInsensitiveCompare(email) == .orderedSame }) else {
             throw FeedError.message(rows.first?.issue ?? "Claude returned no verified allowance for \(email).")
