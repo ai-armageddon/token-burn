@@ -7,10 +7,32 @@ final class FloatingPanel: NSPanel {
 }
 
 @MainActor
+final class DeckScale: ObservableObject {
+    @Published var value: CGFloat = 1
+    @Published var size = CGSize(width: 428, height: 241)
+}
+
+/// Scales the Deck inside SwiftUI. Scaling the hosting view's bounds instead
+/// draws correctly, but SwiftUI hit-tests its own controls in unscaled window
+/// points, so the top-bar buttons stop matching the cursor away from scale 1.
+struct ScaledWidget: View {
+    @ObservedObject var scale: DeckScale
+    let widget: Widget
+    var body: some View {
+        // An explicit frame keeps the layout pinned to the top left. Without it,
+        // a Deck shrunk below 1x is centered first and clicks drift again.
+        widget.scaleEffect(scale.value, anchor: .topLeading)
+            .frame(width: scale.size.width * scale.value, height: scale.size.height * scale.value, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let store = Store()
     private var panel: FloatingPanel!
-    private var host: NSHostingView<Widget>?
+    private var host: NSHostingView<ScaledWidget>?
+    private let deckScale = DeckScale()
     private let canvas = NSView()
     private let grip = WindowResizeGrip()
     private var layoutSize = CGSize(width: 428, height: 241)
@@ -41,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         let widget = Widget(store: store, resize: { [weak self] size in self?.resize(size) },
                             minimize: { [weak self] in self?.panel.miniaturize(nil) })
-        let host = NSHostingView(rootView: widget)
+        let host = NSHostingView(rootView: ScaledWidget(scale: deckScale, widget: widget))
         host.sizingOptions = []
         self.host = host
         panel.contentView = canvas
@@ -97,10 +119,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             frame.origin.x = max(bounds.minX, min(frame.origin.x, bounds.maxX - frame.width))
         }
         panel.setFrame(frame, display: true)
-        // SwiftUI lays out in logical points. AppKit scales the host and its native
-        // mouse targets together, preserving tile dragging and editable controls.
+        // SwiftUI lays out in logical points and scales them itself, so its hit
+        // testing and the embedded AppKit drag targets both follow the cursor.
         host.frame = canvas.bounds
-        host.bounds = CGRect(origin: .zero, size: size)
+        deckScale.size = size
+        deckScale.value = frame.width / size.width
         grip.baseSize = size
         grip.frame = CGRect(x: canvas.bounds.maxX - 18, y: 0, width: 18, height: 18)
         panel.invalidateCursorRects(for: grip)
