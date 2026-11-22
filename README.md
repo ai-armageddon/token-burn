@@ -1,6 +1,6 @@
 # Token Burn
 
-Token Burn is a macOS app for tracking AI subscriptions. Its main view, the **Deck**, keeps your accounts visible across desktops. Each ring shows the percentage of allowance left for Claude, Codex, OpenCode Go or Grok.
+Token Burn is a macOS app for tracking AI subscriptions. Its main view, the **Deck**, keeps your accounts visible across desktops. Each ring shows the percentage of allowance left for Claude, Codex, OpenCode Go or Grok. A companion Deck runs on [Windows and Linux](#windows-and-linux).
 
 ![Sample Deck showing Claude Pro at 82% left, Claude Max 20x at 14%, Codex Pro 500 at 63%, OpenCode Go Plus at 38%, and SuperGrok at 92%.](docs/screenshots/deck.png)
 
@@ -32,6 +32,28 @@ For a hosted GitHub release, pass the real project URL to `./package.sh https://
 Open Token Burn. If CodexBar is missing, **Set up live tracking** offers **Install CodexBar** on Macs with Homebrew. Otherwise, **Download CodexBar** opens its official release page. Move CodexBar to Applications and the Deck detects it. Completing first-run setup opens Connected accounts. **Later** keeps manual entries available, and the refresh arrow reopens setup. [CodexBar installation](https://github.com/steipete/CodexBar#install)
 
 Open **+ → Connected accounts** to add accounts. For Claude, enter the account email and choose **Add Claude login**. Token Burn prompts for Claude Code if needed, then starts Claude’s browser authorization. For Codex, OpenCode Go, and Grok, sign in with the provider or configure the account in CodexBar, then use **Refresh accounts** and **Add** in Token Burn. **Manual entry** works for all four providers.
+
+## Windows and Linux
+
+The `desktop/` folder holds a companion Deck for Windows and Linux. It is built with Tauri and uses the same rings, tiles, account order, pricing and reset rules as the Mac app. It reads usage the same way, through the CodexBar CLI.
+
+- **Linux.** Install the CodexBar CLI with `brew install steipete/tap/codexbar`, from the AUR (`codexbar-cli`), or from a Linux release tarball. Token Burn finds it in `~/.local/bin`, Homebrew's Linux prefix, `/usr/local/bin` or your `PATH`. If Homebrew is present, **Install CodexBar** runs it for you. The tray icon needs an AppIndicator-capable desktop; on GNOME, that means the AppIndicator extension. Without a tray, use the window's own buttons.
+- **Windows.** CodexBar has no native Windows CLI, so Token Burn runs it inside WSL. Run `wsl --install`, then install the CodexBar Linux CLI, and Claude Code if you use **Add Claude login**, inside your default WSL distribution. Separate Claude logins keep their profiles in the WSL home folder under `~/.local/share/token-burn`.
+- Browser-cookie and Keychain sources are macOS-only in CodexBar. On Linux and WSL, configure Codex, OpenCode Go and Grok logins with OAuth, an API key, or a manual cookie in the CodexBar CLI config. Claude Desktop accounts are not available. **Manual entry** works everywhere.
+- Settings and cached readings are saved in `accounts.json`, in `~/.local/share/app.tokenburn.deck/` on Linux and `%APPDATA%\app.tokenburn.deck\` on Windows.
+
+### Build the companion
+
+Install Node.js 20 or later and Rust, plus the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your system. On Debian or Ubuntu, those are `libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`. Then run these commands.
+
+```sh
+cd desktop
+npm ci
+npm test
+npx tauri build
+```
+
+Linux produces `.deb`, `.rpm` and AppImage packages; Windows produces NSIS and MSI installers. They appear under `desktop/src-tauri/target/release/bundle/`. The **Windows and Linux Deck** GitHub workflow builds both on each change to `desktop/`. `npm run dev` opens a browser preview with the fictional sample accounts; add `?setup` or `?windows&setup` to the URL to see first-run setup.
 
 ## Using the Deck
 
